@@ -1,0 +1,99 @@
+---
+title: "May 2022 Covid prevalance and severity in Ireland compare to Minnesota"
+author: "Alan Klein"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# Overview
+I got Covid in May 2022, I'm pretty sure it actually came from someone who was traveling internationally from Ireland.  I want to know if Covid was more prevalent and deadly in Minnesota(my home state) or Ireland around this time.  Additionally I want to know if air travel is correlated with increased covid rates.
+
+
+##### Required Packages
+```{r libraries, echo=TRUE, message=FALSE}
+library(tidyverse)
+library(magrittr)
+```
+
+Data_Science_as_a_Field/Week_5/2021_To_2023_Ireland_Flight_Data.csv
+# Data Overview
+These five datasets contain Covid-19 case and death data grouped by US and global.  There is a population data file as well.  This data is curated by the by John Hopkins Coronavisus Research Center.  More information can be found on their github.  <https://github.com/CSSEGISandData/COVID-19>.
+
+Additionally I downloaded two data sets that contain flight information for MSP, minnesotas primary airport and, flight data for Ireland's airports.  The Ireland data came from here <https://data.cso.ie/table/TAM05> and the MSP data came from here <https://www.transtats.bts.gov/Data_Elements.aspx?Data=1>  I could not get links to work to directly download the data but I loaded this data to my github so it will be reproducable.
+
+##### Load The Data
+```{r dataload, include=FALSE}
+Url_In <- "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/"
+
+File_Names <- c("time_series_covid19_confirmed_US.csv",  "time_series_covid19_confirmed_global.csv", "time_series_covid19_deaths_US.csv",  "time_series_covid19_deaths_global.csv")
+
+Urls <- str_c(Url_In,File_Names)
+
+US_Cases <- read_csv(Urls[1], show_col_types = FALSE)
+Global_Cases <- read_csv(Urls[2], show_col_types = FALSE)
+US_Deaths <- read_csv(Urls[3], show_col_types = FALSE)
+Global_Deaths <- read_csv(Urls[4], show_col_types = FALSE)
+Population <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/UID_ISO_FIPS_LookUp_Table.csv", show_col_types = FALSE)
+Ireland_Air_Travel <- read_csv("https://raw.githubusercontent.com/Saganoky/MS_Data_Science_CU_Boulder/main/Data_Science_as_a_Field/Week_5/2021_To_2023_Ireland_Flight_Data.csv", show_col_types = FALSE)
+MSP_Air_Travel <- read_csv("https://raw.githubusercontent.com/Saganoky/MS_Data_Science_CU_Boulder/main/Data_Science_as_a_Field/Week_5/MSP_Flight_Data.csv",show_col_types = FALSE)
+```
+
+# Data 
+I noticed some rows had negative case and death values.  This will be removed as this cant happen in real life so they must be erroneous.  To get the data ready for analysis it will be summarized by state and filtered to Minnesota and Ireland data.  Additionally, population data will be appended and unused columns removed.
+
+
+```{r datamanipulation, include=FALSE}
+
+Global_Cases <- Global_Cases %>% pivot_longer(cols = -c('Province/State','Country/Region',Lat,Long),  names_to = "Date", values_to = "Cases") %>% select(-c(Lat,Long)) 
+Global_Deaths <- Global_Deaths %>% pivot_longer(cols = -c('Province/State','Country/Region',Lat,Long),  names_to = "Date", values_to = "Deaths") %>% select(-c(Lat,Long))
+US_Cases <- US_Cases %>% pivot_longer(cols = -(UID:Combined_Key),  names_to = "Date", values_to = "Cases")  
+US_Deaths <- US_Deaths  %>% pivot_longer(cols = -(UID:Population),  names_to = "Date", values_to = "Deaths") 
+
+Global_Cases <- Global_Cases %>% mutate(Date = mdy(Date)) %>% rename(Province_State = 'Province/State', Country_Region = 'Country/Region' )
+Global_Deaths <- Global_Deaths %>% mutate(Date = mdy(Date)) %>% rename(Province_State = 'Province/State', Country_Region = 'Country/Region' )
+US_Cases <- US_Cases %>% mutate(Date = mdy(Date))
+US_Deaths <- US_Deaths %>% mutate(Date = mdy(Date))
+
+Minnesota_Cases <- US_Cases %>% filter(Province_State == 'Minnesota')
+Minnesota_Deaths <- US_Deaths %>% filter(Province_State == 'Minnesota')
+Ireland_Cases <- Global_Cases %>% filter(Country_Region == 'Ireland')
+Ireland_Deaths <- Global_Deaths %>% filter(Country_Region == 'Ireland')
+
+```
+
+
+
+
+
+# Bias 
+
+
+
+
+
+#Conclusion
+
+
+
+
+
+
+
+
+
+
+
+### Session Information
+```{r sessioninfo, echo=FALSE}
+sessionInfo()
+```
+
+
+
+
+
+
+
+
+
+
