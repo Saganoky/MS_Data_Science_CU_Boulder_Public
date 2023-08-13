@@ -5,24 +5,30 @@ date: "`r Sys.Date()`"
 output: html_document
 ---
 
-# Overview
-I got Covid in May 2022, I'm pretty sure it actually came from someone who was traveling internationally from Ireland.  I want to know if Covid was more prevalent and deadly in Minnesota(my home state) or Ireland around this time.  Additionally I want to know if air travel is correlated with increased covid rates.
 
 
-##### Required Packages
+#### Required Packages
 ```{r libraries, echo=TRUE, message=FALSE}
 library(tidyverse)
 library(magrittr)
 ```
 
-Data_Science_as_a_Field/Week_5/2021_To_2023_Ireland_Flight_Data.csv
-# Data Overview
-These five datasets contain Covid-19 case and death data grouped by US and global.  There is a population data file as well.  This data is curated by the by John Hopkins Coronavisus Research Center.  More information can be found on their github.  <https://github.com/CSSEGISandData/COVID-19>.
 
-Additionally I downloaded two data sets that contain flight information for MSP, minnesotas primary airport and, flight data for Ireland's airports.  The Ireland data came from here <https://data.cso.ie/table/TAM05> and the MSP data came from here <https://www.transtats.bts.gov/Data_Elements.aspx?Data=1>  I could not get links to work to directly download the data but I loaded this data to my github so it will be reproducable.
 
-##### Load The Data
-```{r dataload, include=FALSE}
+# Overview
+I got Covid in early May 2022, I'm pretty sure it actually came from someone who was traveling internationally from Ireland.  I want to know if Covid was more prevalent and deadly in Minnesota(my home state) or Ireland around this time.  Additionally I want to know if air travel is correlated with increased Covid rates.
+
+
+
+# Dataset Information
+These five data sets contain Covid-19 case and death data grouped by US and global.  There is a population data file as well.  This data is curated by the by John Hopkins Coronavisus Research Center.  More information can be found on their github.  <https://github.com/CSSEGISandData/COVID-19>.
+
+Additionally I downloaded a data set that contain flight information for MSP, Minnesota's primary airport.  It came from here <https://www.transtats.bts.gov/Data_Elements.aspx?Data=1>  I could not get the link to work to directly download the data. So I loaded the data to my github, and it will be pulled from there.
+
+
+
+#### Load The Data
+```{r dataload, echo=TRUE}
 Url_In <- "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/"
 
 File_Names <- c("time_series_covid19_confirmed_US.csv",  "time_series_covid19_confirmed_global.csv", "time_series_covid19_deaths_US.csv",  "time_series_covid19_deaths_global.csv")
@@ -34,15 +40,16 @@ Global_Cases <- read_csv(Urls[2], show_col_types = FALSE)
 US_Deaths <- read_csv(Urls[3], show_col_types = FALSE)
 Global_Deaths <- read_csv(Urls[4], show_col_types = FALSE)
 Population <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/UID_ISO_FIPS_LookUp_Table.csv", show_col_types = FALSE)
-Ireland_Air_Travel <- read_csv("https://raw.githubusercontent.com/Saganoky/MS_Data_Science_CU_Boulder/main/Data_Science_as_a_Field/Week_5/2021_To_2023_Ireland_Flight_Data.csv", show_col_types = FALSE)
-MSP_Air_Travel <- read_csv("https://raw.githubusercontent.com/Saganoky/MS_Data_Science_CU_Boulder/main/Data_Science_as_a_Field/Week_5/MSP_Flight_Data.csv",show_col_types = FALSE)
+MSP_Air_Travel <- read_csv("https://raw.githubusercontent.com/Saganoky/MS_Data_Science_CU_Boulder_Public/main/Data_Science_as_a_Field/Week_5/MSP_Flight_Data.csv",show_col_types = FALSE)
 ```
 
-# Data 
+
+
+# Tidying and Transformating the Data 
 I noticed some rows had negative case and death values.  This will be removed as this cant happen in real life so they must be erroneous.  To get the data ready for analysis it will be summarized by state and filtered to Minnesota and Ireland data.  Additionally, population data will be appended and unused columns removed.
 
 
-```{r datamanipulation, include=FALSE}
+```{r Tidying Transforming, echo=TRUE, message=FALSE}
 
 Global_Cases <- Global_Cases %>% pivot_longer(cols = -c('Province/State','Country/Region',Lat,Long),  names_to = "Date", values_to = "Cases") %>% select(-c(Lat,Long)) 
 Global_Deaths <- Global_Deaths %>% pivot_longer(cols = -c('Province/State','Country/Region',Lat,Long),  names_to = "Date", values_to = "Deaths") %>% select(-c(Lat,Long))
@@ -58,32 +65,94 @@ Minnesota_Cases <- US_Cases %>% filter(Province_State == 'Minnesota')
 Minnesota_Deaths <- US_Deaths %>% filter(Province_State == 'Minnesota')
 Ireland_Cases <- Global_Cases %>% filter(Country_Region == 'Ireland')
 Ireland_Deaths <- Global_Deaths %>% filter(Country_Region == 'Ireland')
-
+Ireland_Population <- Population %>% filter(Country_Region == 'Ireland')
+  
+Minnesota_Cases_Death_Population <- Minnesota_Cases %>% full_join(Minnesota_Deaths) %>% group_by(Date, Province_State, Country_Region ) %>% summarize(Cases = sum(Cases), Deaths = sum(Deaths), Population = sum(Population)) %>% mutate(State_Country = 'Minnesota, USA')
+Ireland_Cases_Death <- Ireland_Cases %>% full_join(Ireland_Deaths)
+Ireland_Cases_Death_Population <- Ireland_Cases_Death  %>% full_join(Ireland_Population) %>% group_by(Date, Province_State, Country_Region ) %>% summarize(Cases = sum(Cases), Deaths = sum(Deaths), Population = sum(Population)) %>% mutate(State_Country = 'Ireland')
+  
+Minnesota_Ireland_Cases_Death_Population <- union(Minnesota_Cases_Death_Population, Ireland_Cases_Death_Population) %>%  arrange(State_Country, Date) 
 ```
 
 
 
+# Data Analysis
+The following code calculated the daily new cases and deaths by looking at the previous day and comparing that to the current day.  Also, the daily Case Fatality Rate is calculated by dividing the new deaths by the new cases.  This is than divided by the total population and multiplied by 1000 to calculated cases per 1000.  It is then summarized by month and limited to 2022 to better focus on the time period when I got Covid.
+
+
+
+```{r New Cases Deaths, message=FALSE}
+MI_New_Cases_New_Deaths <- Minnesota_Ireland_Cases_Death_Population %>% ungroup()  %>% mutate(New_Cases = Cases - lag(Cases), New_Deaths = Deaths - lag(Deaths)) %>% filter(Cases > 0)
+
+MI_New_Cases_New_Deaths_Monthly <- MI_New_Cases_New_Deaths %>% group_by(First_Of_The_Month = floor_date(Date, 'month'), State_Country, Population) %>% summarize(New_Cases = sum(New_Cases), New_Deaths = sum(New_Deaths)) %>% mutate(New_Cases_Per_1000 = New_Cases/Population*1000,, New_Deaths_Per_1000 = New_Deaths/Population*1000) %>% mutate(Case_Fatality_Rate = New_Deaths_Per_1000/New_Cases_Per_1000)
+
+MI_New_Cases_New_Deaths_Monthly_2022 <- MI_New_Cases_New_Deaths_Monthly %>% filter(year(First_Of_The_Month) == '2022' ) 
+```
+
+
+
+# New Cases Plot Analysis
+The code below generated the monthly new cases per 1000 plot.  One can see that around the beginning of May Ireland has similar Covid cases.  So the risk of catching Covid from a Minnesotan or someone from Ireland was probably similar atleast at a macro level. 
+```{r Cases Plot, echo=TRUE, message=FALSE}
+MI_New_Cases_New_Deaths_Monthly_2022 %>% ggplot(aes(x = First_Of_The_Month, y = New_Cases_Per_1000, group = State_Country)) + geom_point(aes(color = State_Country) ) + geom_line(aes(color = State_Country)) + xlab('Month') + ylab('New Cases Per 1000') + labs(color='Location')
+```
+
+
+
+# Case Fatality Rate Analysis
+Code below generates the CFR plot.  It appears that around May 2022 the CFR was slightly lower for Minnesota than Ireland.  However, in the previous months Minnesota's rate is higher.  Its hard to say due to the nature of the data if the Covid variant I got from Ireland was likely to be more or less deadly.  If we had data that better connected specific cases to deaths or survival I could do a better analysis as the cases that caused a death probably first occurred in the previous month.
+
+```{r CFR Plot, echo=TRUE, message=FALSE}
+MI_New_Cases_New_Deaths_Monthly_2022 %>% ggplot(aes(x = First_Of_The_Month, y = Case_Fatality_Rate, group = State_Country)) + geom_point(aes(color = State_Country) ) +geom_line(aes(color = State_Country)) + xlab('Month') + ylab('Case Fatality Rate (CFR)') + labs(color='Location')
+```
+
+
+
+# MSP Flight Data Tidying and Transformating
+I cleaned up the MSP flight data and created a first of the month field to use to join it to the Minnesota Covid data. A column called international flights per 1000 was calculated by taking the number of international flights and dividing it by the population and multiplying by 1000. This was then limited to 2021 and 2022 as before that there were not any international flight to analyze.  
+
+```{r Flight Data, message=FALSE}
+MSP_Air_Travel <- MSP_Air_Travel %>% filter(Month != 'TOTAL') %>% mutate(First_Of_The_Month = ymd(str_c(Year,"-",Month,"-1"))) %>% select(-c('Year','Month'))
+
+MN_Data_With_Air_Travel <- MI_New_Cases_New_Deaths_Monthly %>% filter(State_Country == 'Minnesota, USA') %>% inner_join(MSP_Air_Travel) %>% mutate(International_Flights_Per_1000 = INTERNATIONAL/Population*1000) %>% ungroup() %>% mutate(One_Month_Lead_New_Cases_Per_1000 = lead(New_Cases_Per_1000)) %>% filter(year(First_Of_The_Month) == '2021' | year(First_Of_The_Month) == '2022')
+```
+
+
+
+# MN flights and Cases Plot
+The first step is to plot international flights and new cases per 1000 to see if they even look correlated.  The code to do this is below.  I actually appears that international flights lag cases by a month.
+
+
+
+```{r Flight Plot, message=FALSE}
+MN_Data_With_Air_Travel %>% ggplot(aes(x = First_Of_The_Month)) + geom_point(aes(y = International_Flights_Per_1000, color = 'International_Flights_Per_1000')) + geom_line(aes(y = International_Flights_Per_1000, color = 'International_Flights_Per_1000')) + geom_point(aes(y = New_Cases_Per_1000, color = 'New_Cases_Per_1000')) + geom_line(aes(y = New_Cases_Per_1000, color = 'New_Cases_Per_1000')) + xlab('Month') + ylab('New Cases or Flights per 1000') + labs(color='Legend')
+```
+
+
+
+# Linear Model
+Below is the code to run a linear model to see if new cases per 1000 or new cases per 1000 with a 1 month lead are correlated to international flights per 1000.  Based on the high p-values there is no correlation.
+
+```{r Flight Linear Model, message=FALSE}
+Cases_Flights_Model <- lm(New_Cases_Per_1000~International_Flights_Per_1000, data = MN_Data_With_Air_Travel)
+summary(Cases_Flights_Model)
+
+Cases_Flights_Model_One_Month_Lead <- lm(One_Month_Lead_New_Cases_Per_1000~International_Flights_Per_1000, data = MN_Data_With_Air_Travel)
+summary(Cases_Flights_Model_One_Month_Lead)
+```
 
 
 # Bias 
+One of the main sources of bias for this analysis is that I wanted to find that there was something with the Irish Covid data that I could blame for me getting sick.  This is something I had to keep in mind when doing this analysis and continuously remind myself to analysis the data and not see patterns that are not there. Another source of bias would be the politics around reporting Covid sickness and death.  At the time Minnesota was pretty good about reporting these metrics.  However, I'm not sure about the political climate of Ireland at the time.  Last source of bias I could think of would be that I used MSP(main Minnesota airport) data as a proxy for all international travel in Minnesota.  I'm not sure how good of an assumption this is.
 
 
 
-
-
-#Conclusion
-
-
+# Conclusion
+There is no evidence that in May 2022 Ireland's Covid cases where not more deadly or virulent.  Additionally, there seems to be no link between international travel and Covid rates.  However, due to limitations in data such as being able to tie specific cases to deaths and not having granual flight data, it was hard to draw definitive conclusions and future analysis could yeild different results.
 
 
 
-
-
-
-
-
-
-### Session Information
+#### Session Information
 ```{r sessioninfo, echo=FALSE}
 sessionInfo()
 ```
