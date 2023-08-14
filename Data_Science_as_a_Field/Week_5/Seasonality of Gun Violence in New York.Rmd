@@ -1,0 +1,94 @@
+---
+title: "Seasonality of Gun Violence in New York"
+author: "Alan Klein"
+date: "2023-8-9"
+output:
+  html_document: default
+---
+# Overview
+This analysis answers if gun violence in New York is seasonal.
+
+#### Required libraries
+```{r libraries, echo=TRUE, message=FALSE}
+library(tidyverse)
+library(magrittr)
+library(prophet)
+```
+
+
+# Data Overview
+This is data on every shooting recorded by the NYPD in NYC back to 2006 through the end of the previous year.  Contains location and time information as well as suspect and victim demographics.  One can find more information here:  https://catalog.data.gov/dataset/nypd-shooting-incident-data-historic
+
+
+#### Load the data
+```{r load shooting data, echo=TRUE}
+Url <- "https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD"
+NYPD_Shooting_Data <- read_csv(Url,show_col_types = FALSE)
+```
+
+
+
+#### Convert columns to correct data types and remove unused columns
+```{r convert date, echo=TRUE}
+NYPD_Shooting_Data_Transformed <- NYPD_Shooting_Data  %>% mutate(OCCUR_DATE = mdy(OCCUR_DATE)) %>% select(c(OCCUR_DATE))
+```
+
+
+
+# Missing Data
+Because I'm only using the date and time that the shootings occurred, which is always populated I'm not worried about other missing data elements.
+```{r filters, echo=TRUE}
+summary(NYPD_Shooting_Data_Transformed)
+```
+
+
+
+#### Create a plot of hours of the day
+```{r Hour of the day, echo=FALSE}
+Data_Monthly <- NYPD_Shooting_Data_Transformed %>% group_by(Occur_Month = floor_date(OCCUR_DATE, 'month')) %>% summarize(number_of_shootings = n())
+Data_Monthly %>% ggplot(aes(x = Occur_Month, y = number_of_shootings)) + geom_line()+ scale_x_date(date_breaks = "2 year", date_labels =  "%Y") + xlab('Year') + ylab('Shootings Per Month')
+```
+
+The above graph hints that there is some seasonality as well as a decreasing trend until 2020.  Lets try modeling it in Prophet and see what we get.
+
+
+
+#### Prophet implimentation and model plot
+```{r propeht1, echo=TRUE, message=FALSE}
+df <- Data_Monthly %>% rename('ds' = 'Occur_Month', 'y' = 'number_of_shootings')
+m <- prophet(df,  interval.width = 0.95)
+future <- make_future_dataframe(m, periods = 12, freq = 'month')
+forecast <- predict(m, future)
+plot(m, forecast)
+```
+
+The above graph shows that the model fits okay.  The shaded blue area is the 95% CI and most of the black dots which represent the actual data point occur within the area.  There is definitely, some outliers around Covid(May 2020).  In a future analysis this would be something to further investigate.
+
+
+
+#### Forecast components
+```{r propeht2, echo=TRUE}
+prophet_plot_components(m, forecast)
+```
+
+The above graph shows the trend and yearly seasonality components of the forecast.  There is definitely a seasonal component to gun violence peaking in September.  The trend component is interesting as the turning point seems to occur before 2020, which is not what I would have expected looking at the data. One potential cause is that I have not normalized the data for the population. This is occurring could be something to investigate in future analysis.
+
+
+
+# Bias and Conclusion
+There are many sources of bias that could effect this analysis.  First is the bias of the data. It is collected by the New York Police Department, which will have its own biases in policing as well as data collection.  I could see different precincts handling shootings very differently.  Additionally, for data to be included a shooting must be reported and followed up on.  I could see there being certain types of violence such as gang on gang violence that isn't reported.  
+
+Also, I must consider my personal bias I'm a white male middle class Minnesotan who has never been to New York. I don't understand the nuances of the of New York.
+
+I think the best way to mitigate biases is to first always spend some time thinking about them and there potential impact on an analysis.  The next step is to continue to ask questions.  In my analysis I ended up with more questions than answers.  For example, I assume that the spike in shootings in 2020 is Covid related, but I recognize that I don't really know and would want to dig a bit deeper to see if there are any other factors that would cause this spike I didn't think about.
+
+To answer the original question, there seems to be a seasonality to gun violence in New York.  This can be seen by inspecting a plot of the data as well as modeling this seasonality using Facebook Prophet.
+
+
+
+### Session Information
+```{r sessioninfo, echo=FALSE}
+sessionInfo()
+```
+
+
